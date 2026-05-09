@@ -29,6 +29,8 @@ let activeChatListener = null;
 let usersRef = null;
 let presenceListeners = [];
 let requestedDisplayName = null;
+let lastReceivedTimestamp = null;
+const RESPONSE_LATE_MS = 2 * 60 * 1000; // 2 minutes
 
 // Get DOM elements
 const loginContainer = document.getElementById('loginContainer');
@@ -213,6 +215,10 @@ function sendMessage() {
     if (!currentChatUser || !chatMessagesRef) return;
     const message = messageInput.value.trim();
     if (message) {
+        if (shouldShowLateWarning()) {
+            insertLateResponseWarning();
+            lastReceivedTimestamp = null;
+        }
         push(chatMessagesRef, {
             text: message,
             timestamp: Date.now(),
@@ -226,6 +232,7 @@ function sendMessage() {
 // Function to load messages for current chat
 function loadMessages() {
     messagesDiv.innerHTML = '';
+    lastReceivedTimestamp = null;
     // Messages will be loaded via onChildAdded listener
 }
 
@@ -237,11 +244,25 @@ function displayMessage(message) {
         messageDiv.classList.add('sent');
     } else {
         messageDiv.classList.add('received');
+        lastReceivedTimestamp = message.timestamp;
     }
     const timeString = new Date(message.timestamp).toLocaleString();
     messageDiv.innerHTML = `<div><strong>${message.sender}:</strong> ${message.text}</div><div class="timestamp">${timeString}</div>`;
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function insertLateResponseWarning() {
+    const warningDiv = document.createElement('div');
+    warningDiv.classList.add('warning-line');
+    warningDiv.textContent = 'Late response: this reply came more than 2 minutes after the last incoming message.';
+    messagesDiv.appendChild(warningDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function shouldShowLateWarning() {
+    if (!lastReceivedTimestamp) return false;
+    return Date.now() - lastReceivedTimestamp > RESPONSE_LATE_MS;
 }
 
 // Function to select a chat
