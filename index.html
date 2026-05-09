@@ -13,28 +13,22 @@
         <div class="login-form glass-card">
             <div class="brand-logo">C</div>
             <h2>Welcome back</h2>
-            <p>Login with your name to start chatting instantly.</p>
+            <p>Input your name here.</p>
             <input type="text" id="usernameInput" placeholder="Enter your name">
             <button id="loginButton" class="primary-button">Continue</button>
         </div>
     </div>
     <div id="appContainer" class="app-container" style="display: none;">
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <aside class="sidebar glass-card">
-            <div class="sidebar-top">
-                <div class="app-brand">
-                    <div class="brand-icon">C</div>
-                    <div>
-                        <h2>Chat Tool</h2>
-                        <p>~~~NMH_2026~~~</p>
-                    </div>
-                </div>
-                <button id="refreshButton" class="icon-button">⟳</button>
-            </div>
             <div class="user-panel">
                 <div class="user-avatar">A</div>
                 <div>
                     <div class="user-name" id="currentUserName">Logged in as User</div>
                     <div class="user-status">Online • Ready to chat</div>
+                </div>
+                <div>
+                    <button id="refreshButton" class="icon-button">⟳</button>
                 </div>
             </div>
             <div class="search-box">
@@ -55,6 +49,7 @@
                     </div>
                 </div>
                 <div class="header-buttons">
+                    <button id="menuButton" class="icon-button">☰</button>
                     <button id="clearButton" class="ghost-button">Clear</button>
                     <button id="logoutButton" class="primary-button">Logout</button>
                 </div>

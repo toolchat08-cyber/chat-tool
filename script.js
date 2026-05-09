@@ -28,6 +28,8 @@ let chatMessagesListener = null;
 let activeChatListener = null;
 let usersRef = null;
 let presenceListeners = [];
+let chatNotificationListeners = [];
+let unreadCounts = {};
 let requestedDisplayName = null;
 let lastReceivedTimestamp = null;
 const RESPONSE_LATE_MS = 2 * 60 * 1000; // 2 minutes
@@ -53,6 +55,8 @@ const onlineCountLabel = document.getElementById('onlineCountLabel');
 const emojiButton = document.getElementById('emojiButton');
 const emojiPicker = document.getElementById('emojiPicker');
 const emojiOptions = document.querySelectorAll('.emoji-option');
+const menuButton = document.getElementById('menuButton');
+const sidebarOverlay = document.getElementById('sidebarOverlay');
 let contactsData = [];
 
 // Function to handle login
@@ -167,6 +171,7 @@ function renderContacts() {
                 <p class="contact-name">${contact.displayName}</p>
                 <p class="contact-status status-online">Online</p>
             </div>
+            ${contact.unreadCount > 0 ? `<span class="unread-badge">${contact.unreadCount > 99 ? '99+' : contact.unreadCount}</span>` : ''}
         `;
         contactsList.appendChild(contactDiv);
     });
@@ -184,10 +189,42 @@ function cleanupContactListeners() {
     presenceListeners = [];
 }
 
+function cleanupNotificationListeners() {
+    chatNotificationListeners.forEach(({ chatRef, callback }) => {
+        off(chatRef, 'child_added', callback);
+    });
+    chatNotificationListeners = [];
+}
+
+function setupNotificationListeners() {
+    cleanupNotificationListeners();
+    const listenerStartTime = Date.now();
+
+    contactsData.forEach((contact) => {
+        const chatId = [currentUser.uid, contact.uid].sort().join('_');
+        const chatRef = ref(database, `chats/${chatId}/messages`);
+
+        const callback = (snapshot) => {
+            const message = snapshot.val();
+            if (!message || message.senderUid === currentUser.uid) return;
+            if (message.timestamp <= listenerStartTime) return;
+            if (currentChatUser && currentChatUser.uid === contact.uid) return;
+
+            contact.unreadCount = (contact.unreadCount || 0) + 1;
+            unreadCounts[contact.uid] = contact.unreadCount;
+            renderContacts();
+        };
+
+        onChildAdded(chatRef, callback);
+        chatNotificationListeners.push({ chatRef, callback });
+    });
+}
+
 // Function to initialize contacts
 function initializeContacts() {
     console.log('Initializing contacts for user:', currentUser.displayName);
     cleanupContactListeners();
+    cleanupNotificationListeners();
     contactsData = [];
     usersRef = ref(database, 'presence');
     try {
@@ -196,9 +233,10 @@ function initializeContacts() {
             console.log('Presence loaded:', Object.keys(presences));
             contactsData = Object.keys(presences)
                 .filter(uid => uid !== currentUser.uid)
-                .map(uid => ({ uid, ...presences[uid] }))
+                .map(uid => ({ uid, unreadCount: unreadCounts[uid] || 0, ...presences[uid] }))
                 .filter(contact => contact.online);
             renderContacts();
+            setupNotificationListeners();
         });
     } catch (error) {
         console.error('Error initializing contacts:', error);
@@ -278,10 +316,15 @@ function selectChat(contact) {
     if (contact.uid === currentUser.uid) return;
     currentChatUser = contact;
     chatTitle.textContent = contact.displayName;
-    chatStatus.textContent = contact.online ? 'Online now' : 'Offline';
+    chatStatus.textContent = contact.online ? 'Online now 👽' : 'Offline';
     chatAvatar.textContent = contact.displayName[0].toUpperCase();
     messageInput.disabled = false;
     sendButton.disabled = false;
+
+    contact.unreadCount = 0;
+    unreadCounts[contact.uid] = 0;
+    renderContacts();
+
     // Stop previous listener
     if (chatMessagesRef && activeChatListener) {
         off(chatMessagesRef, 'child_added', activeChatListener);
@@ -377,3 +420,14 @@ document.addEventListener('click', (event) => {
 });
 
 logoutButton.addEventListener('click', logout);
+
+// Mobile sidebar toggle
+menuButton.addEventListener('click', () => {
+    document.querySelector('.sidebar').classList.toggle('open');
+    sidebarOverlay.classList.toggle('open');
+});
+
+sidebarOverlay.addEventListener('click', () => {
+    document.querySelector('.sidebar').classList.remove('open');
+    sidebarOverlay.classList.remove('open');
+});
