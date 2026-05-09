@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Tool</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="loginContainer" class="login-container">
+        <div class="login-form">
+            <h2>Login to Chat</h2>
+            <input type="text" id="usernameInput" placeholder="Enter your name">
+            <button id="loginButton">Login</button>
+        </div>
+    </div>
+    <div id="appContainer" style="display: none;">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h3>Contacts</h3>
+            </div>
+            <div class="contacts-list" id="contactsList"></div>
+        </div>
+        <div class="main-chat">
+            <div class="chat-header">
+                <h1 id="chatTitle">Select a contact to chat</h1>
+                <button id="clearButton">Clear Chat</button>
+            </div>
+            <div class="chat-messages" id="messages"></div>
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Type your message..." disabled>
+                <button id="sendButton" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
