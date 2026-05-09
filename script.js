@@ -1,7 +1,7 @@
 // Import Firebase modules
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
 import { getDatabase, ref, push, onChildAdded, set, onDisconnect, onValue } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
-import { getAuth, signInAnonymously, updateProfile, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+import { getAuth, signInAnonymously, updateProfile, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
 
 // Firebase configuration - Replace with your own config
 const firebaseConfig = {
@@ -25,6 +25,7 @@ let currentChatUser = null;
 let userPresenceRef = null;
 let chatMessagesRef = null;
 let chatMessagesListener = null;
+let requestedDisplayName = null;
 
 // Get DOM elements
 const loginContainer = document.getElementById('loginContainer');
@@ -43,6 +44,7 @@ const logoutButton = document.getElementById('logoutButton');
 async function login() {
     const username = usernameInput.value.trim();
     if (username) {
+        requestedDisplayName = username;
         try {
             await signInAnonymously(auth);
             // Wait for auth state change
@@ -59,12 +61,26 @@ async function login() {
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
-        const username = usernameInput.value.trim();
-        await updateProfile(user, { displayName: username });
+        const username = currentUser.displayName || requestedDisplayName;
+
+        if (!currentUser.displayName && username) {
+            await updateProfile(user, { displayName: username });
+            currentUser = auth.currentUser;
+        }
+
+        if (!currentUser.displayName) {
+            loginContainer.style.display = 'flex';
+            appContainer.style.display = 'none';
+            return;
+        }
+
         loginContainer.style.display = 'none';
         appContainer.style.display = 'flex';
         setupPresence();
         initializeContacts();
+    } else {
+        loginContainer.style.display = 'flex';
+        appContainer.style.display = 'none';
     }
 });
 
@@ -173,6 +189,7 @@ function logout() {
         appContainer.style.display = 'none';
         loginContainer.style.display = 'flex';
         usernameInput.value = '';
+        requestedDisplayName = null;
         currentUser = null;
         currentChatUser = null;
         if (chatMessagesListener) {
