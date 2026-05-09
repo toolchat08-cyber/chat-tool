@@ -454,12 +454,12 @@ body::before {
 }
 
 #logoutButton {
-    background: linear-gradient(135deg, #3b82f6, #0ea5e9);
+    background: linear-gradient(135deg, #f63b3b, #e9530e);
     color: white;
 }
 
 #logoutButton:hover {
-    background: linear-gradient(135deg, #2563eb, #0284c7);
+    background: linear-gradient(135deg, #d7eb25, #5bc702);
 }
 
 .ghost-button {
