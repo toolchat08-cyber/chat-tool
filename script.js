@@ -1,7 +1,7 @@
 // Import Firebase modules
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
-import { getDatabase, ref, push, onChildAdded, set, off, onDisconnect, onValue } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
-import { getAuth, signInAnonymously, updateProfile, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+import { getDatabase, ref, push, onChildAdded, set, off, onDisconnect, onValue, remove } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+import { getAuth, signInAnonymously, updateProfile, onAuthStateChanged, signOut, setPersistence, inMemoryPersistence } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
 
 // Firebase configuration - Replace with your own config
 const firebaseConfig = {
@@ -43,7 +43,15 @@ const sendButton = document.getElementById('sendButton');
 const clearButton = document.getElementById('clearButton');
 const logoutButton = document.getElementById('logoutButton');
 const refreshButton = document.getElementById('refreshButton');
-const userLabel = document.getElementById('userLabel');
+const contactSearchInput = document.getElementById('contactSearchInput');
+const chatAvatar = document.getElementById('chatAvatar');
+const chatStatus = document.getElementById('chatStatus');
+const currentUserName = document.getElementById('currentUserName');
+const onlineCountLabel = document.getElementById('onlineCountLabel');
+const emojiButton = document.getElementById('emojiButton');
+const emojiPicker = document.getElementById('emojiPicker');
+const emojiOptions = document.querySelectorAll('.emoji-option');
+let contactsData = [];
 
 // Function to handle login
 async function login() {
@@ -56,6 +64,7 @@ async function login() {
 
     requestedDisplayName = username;
     try {
+        await setPersistence(auth, inMemoryPersistence);
         if (auth.currentUser) {
             console.log('Signing out existing user before login');
             await signOut(auth);
@@ -74,6 +83,12 @@ async function login() {
 onAuthStateChanged(auth, async (user) => {
     console.log('Auth state changed. User:', user ? user.uid : 'null');
     if (user) {
+        if (!requestedDisplayName) {
+            console.log('Existing session detected on reload; forcing login again');
+            await signOut(auth);
+            return;
+        }
+
         currentUser = user;
         console.log('Current user UID:', currentUser.uid);
         console.log('Current user displayName:', currentUser.displayName);
@@ -97,7 +112,7 @@ onAuthStateChanged(auth, async (user) => {
         console.log('Login successful, showing app');
         loginContainer.style.display = 'none';
         appContainer.style.display = 'flex';
-        userLabel.textContent = `Logged in as ${currentUser.displayName}`;
+        updateUserPanel();
         setupPresence();
         initializeContacts();
     } else {
@@ -123,6 +138,39 @@ function setupPresence() {
     }
 }
 
+function updateUserPanel() {
+    if (!currentUser) return;
+    currentUserName.textContent = `Logged in as ${currentUser.displayName}`;
+    const avatar = currentUser.displayName ? currentUser.displayName[0].toUpperCase() : 'U';
+    document.querySelector('.user-avatar').textContent = avatar;
+}
+
+function renderContacts() {
+    const query = contactSearchInput?.value.trim().toLowerCase() || '';
+    contactsList.innerHTML = '';
+
+    const filtered = contactsData.filter(contact => contact.displayName.toLowerCase().includes(query));
+
+    if (filtered.length === 0) {
+        contactsList.innerHTML = `<div class="empty-state">No contacts found</div>`;
+    }
+
+    filtered.forEach((contact) => {
+        const contactDiv = document.createElement('div');
+        contactDiv.classList.add('contact');
+        contactDiv.onclick = () => selectChat(contact);
+        contactDiv.innerHTML = `
+            <div class="contact-avatar">${contact.displayName[0].toUpperCase()}</div>
+            <div class="contact-info">
+                <p class="contact-name">${contact.displayName}</p>
+                <p class="contact-status status-online">Online</p>
+            </div>
+        `;
+        contactsList.appendChild(contactDiv);
+    });
+    onlineCountLabel.textContent = `${filtered.length} online`;
+}
+
 function cleanupContactListeners() {
     if (usersRef) {
         off(usersRef);
@@ -138,32 +186,17 @@ function cleanupContactListeners() {
 function initializeContacts() {
     console.log('Initializing contacts for user:', currentUser.displayName);
     cleanupContactListeners();
-    contactsList.innerHTML = '';
+    contactsData = [];
     usersRef = ref(database, 'presence');
     try {
         onValue(usersRef, (snapshot) => {
             const presences = snapshot.val() || {};
             console.log('Presence loaded:', Object.keys(presences));
-            contactsList.innerHTML = '';
-            Object.keys(presences).forEach(uid => {
-                if (uid !== currentUser.uid) {
-                    const presence = presences[uid];
-                    if (!presence || !presence.online) return;
-                    const displayName = presence.displayName || 'Guest';
-                    console.log('Adding online contact:', displayName);
-                    const contactDiv = document.createElement('div');
-                    contactDiv.classList.add('contact');
-                    contactDiv.onclick = () => selectChat({ uid, displayName });
-                    contactDiv.innerHTML = `
-                        <div class="contact-avatar">${displayName[0].toUpperCase()}</div>
-                        <div class="contact-info">
-                            <div class="contact-name">${displayName}</div>
-                            <div class="contact-status status-online">Online</div>
-                        </div>
-                    `;
-                    contactsList.appendChild(contactDiv);
-                }
-            });
+            contactsData = Object.keys(presences)
+                .filter(uid => uid !== currentUser.uid)
+                .map(uid => ({ uid, ...presences[uid] }))
+                .filter(contact => contact.online);
+            renderContacts();
         });
     } catch (error) {
         console.error('Error initializing contacts:', error);
@@ -173,6 +206,7 @@ function initializeContacts() {
 function refreshContacts() {
     initializeContacts();
 }
+
 
 // Function to send a message
 function sendMessage() {
@@ -214,7 +248,9 @@ function displayMessage(message) {
 function selectChat(contact) {
     if (contact.uid === currentUser.uid) return;
     currentChatUser = contact;
-    chatTitle.textContent = `Chat with ${contact.displayName}`;
+    chatTitle.textContent = contact.displayName;
+    chatStatus.textContent = contact.online ? 'Online now' : 'Offline';
+    chatAvatar.textContent = contact.displayName[0].toUpperCase();
     messageInput.disabled = false;
     sendButton.disabled = false;
     // Stop previous listener
@@ -245,14 +281,8 @@ function clearChat() {
 function logout() {
     if (currentUser && userPresenceRef) {
         const previousUserRef = ref(database, `users/${currentUser.uid}`);
-        set(userPresenceRef, {
-            online: false,
-            displayName: currentUser.displayName
-        });
-        set(previousUserRef, {
-            online: false,
-            displayName: currentUser.displayName
-        });
+        remove(userPresenceRef);
+        remove(previousUserRef);
     }
 
     signOut(auth).then(() => {
@@ -260,9 +290,15 @@ function logout() {
             off(chatMessagesRef, 'child_added', activeChatListener);
         }
         cleanupContactListeners();
+        messagesDiv.innerHTML = '';
         appContainer.style.display = 'none';
         loginContainer.style.display = 'flex';
-        userLabel.textContent = '';
+        if (currentUserName) currentUserName.textContent = '';
+        const avatarElement = document.querySelector('.user-avatar');
+        if (avatarElement) avatarElement.textContent = 'U';
+        chatTitle.textContent = 'Select a contact';
+        chatStatus.textContent = 'Choose someone to start a conversation.';
+        chatAvatar.textContent = '?';
         usernameInput.value = '';
         requestedDisplayName = null;
         currentUser = null;
@@ -288,4 +324,27 @@ messageInput.addEventListener('keypress', (e) => {
 });
 clearButton.addEventListener('click', clearChat);
 refreshButton.addEventListener('click', refreshContacts);
+contactSearchInput?.addEventListener('input', renderContacts);
+emojiButton?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    emojiPicker?.classList.toggle('open');
+});
+
+emojiOptions.forEach((button) => {
+    button.addEventListener('click', () => {
+        const emoji = button.textContent.trim();
+        if (emoji) {
+            messageInput.value = `${messageInput.value} ${emoji}`.trim();
+            messageInput.focus();
+            emojiPicker?.classList.remove('open');
+        }
+    });
+});
+
+document.addEventListener('click', (event) => {
+    if (!emojiPicker?.contains(event.target) && event.target !== emojiButton) {
+        emojiPicker?.classList.remove('open');
+    }
+});
+
 logoutButton.addEventListener('click', logout);

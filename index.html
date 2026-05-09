@@ -8,37 +8,72 @@
 </head>
 <body>
     <div id="loginContainer" class="login-container">
-        <div class="login-form">
-            <h2>Login to Chat</h2>
+        <div class="login-form glass-card">
+            <div class="brand-logo">C</div>
+            <h2>Welcome back</h2>
+            <p>Login with your name to start chatting instantly.</p>
             <input type="text" id="usernameInput" placeholder="Enter your name">
-            <button id="loginButton">Login</button>
+            <button id="loginButton" class="primary-button">Continue</button>
         </div>
     </div>
-    <div id="appContainer" style="display: none;">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <h3>Contacts</h3>
-                <button id="refreshButton">Refresh</button>
+    <div id="appContainer" class="app-container" style="display: none;">
+        <aside class="sidebar glass-card">
+            <div class="sidebar-top">
+                <div class="app-brand">
+                    <div class="brand-icon">C</div>
+                    <div>
+                        <h2>Chat Tool</h2>
+                        <p>Ultra-modern messaging</p>
+                    </div>
+                </div>
+                <button id="refreshButton" class="icon-button">⟳</button>
+            </div>
+            <div class="user-panel">
+                <div class="user-avatar">A</div>
+                <div>
+                    <div class="user-name" id="currentUserName">Logged in as User</div>
+                    <div class="user-status">Online • Ready to chat</div>
+                </div>
+            </div>
+            <div class="search-box">
+                <input type="text" id="contactSearchInput" placeholder="Search contacts">
             </div>
             <div class="contacts-list" id="contactsList"></div>
-        </div>
-        <div class="main-chat">
+            <div class="sidebar-footer">
+                <span id="onlineCountLabel">0 online</span>
+            </div>
+        </aside>
+        <main class="main-chat glass-card">
             <div class="chat-header">
-                <div>
-                    <h1 id="chatTitle">Select a contact to chat</h1>
-                    <div id="userLabel" class="user-label"></div>
+                <div class="contact-summary">
+                    <div class="contact-avatar large" id="chatAvatar">?</div>
+                    <div class="chat-meta">
+                        <h1 id="chatTitle">Select a contact</h1>
+                        <div id="chatStatus" class="chat-status-text">Choose someone to start a conversation.</div>
+                    </div>
                 </div>
                 <div class="header-buttons">
-                    <button id="clearButton">Clear Chat</button>
-                    <button id="logoutButton">Logout</button>
+                    <button id="clearButton" class="ghost-button">Clear</button>
+                    <button id="logoutButton" class="primary-button">Logout</button>
                 </div>
             </div>
             <div class="chat-messages" id="messages"></div>
             <div class="chat-input">
+                <div class="emoji-wrap">
+                    <button id="emojiButton" class="icon-button">😊</button>
+                    <div class="emoji-picker" id="emojiPicker">
+                        <button type="button" class="emoji-option">😊</button>
+                        <button type="button" class="emoji-option">😂</button>
+                        <button type="button" class="emoji-option">😍</button>
+                        <button type="button" class="emoji-option">😎</button>
+                        <button type="button" class="emoji-option">👍</button>
+                        <button type="button" class="emoji-option">🎉</button>
+                    </div>
+                </div>
                 <input type="text" id="messageInput" placeholder="Type your message..." disabled>
-                <button id="sendButton" disabled>Send</button>
+                <button id="sendButton" class="primary-button" disabled>Send</button>
             </div>
-        </div>
+        </main>
     </div>
     <script type="module" src="script.js"></script>
 </body>
