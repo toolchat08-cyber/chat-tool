@@ -37,6 +37,7 @@ const messagesDiv = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const clearButton = document.getElementById('clearButton');
+const logoutButton = document.getElementById('logoutButton');
 
 // Function to handle login
 async function login() {
@@ -166,13 +167,18 @@ function selectChat(contact) {
     });
 }
 
-// Function to clear chat history
-function clearChat() {
-    if (currentChatUser && chatMessagesRef) {
-        // In a real app, you might want to mark messages as deleted instead of removing
-        set(chatMessagesRef, null);
-        messagesDiv.innerHTML = '';
-    }
+// Function to logout
+function logout() {
+    signOut(auth).then(() => {
+        appContainer.style.display = 'none';
+        loginContainer.style.display = 'flex';
+        usernameInput.value = '';
+        currentUser = null;
+        currentChatUser = null;
+        if (chatMessagesListener) {
+            chatMessagesListener();
+        }
+    });
 }
 
 // Event listeners
@@ -189,3 +195,4 @@ messageInput.addEventListener('keypress', (e) => {
     }
 });
 clearButton.addEventListener('click', clearChat);
+logoutButton.addEventListener('click', logout);
