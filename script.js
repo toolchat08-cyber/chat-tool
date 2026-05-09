@@ -1,6 +1,6 @@
 // Import Firebase modules
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
-import { getDatabase, ref, push, onChildAdded, set, onDisconnect, onValue } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+import { getDatabase, ref, push, onChildAdded, set, off, onDisconnect, onValue } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
 import { getAuth, signInAnonymously, updateProfile, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
 
 // Firebase configuration - Replace with your own config
@@ -25,6 +25,7 @@ let currentChatUser = null;
 let userPresenceRef = null;
 let chatMessagesRef = null;
 let chatMessagesListener = null;
+let activeChatListener = null;
 let requestedDisplayName = null;
 
 // Get DOM elements
@@ -104,17 +105,18 @@ function initializeContacts() {
         Object.keys(users).forEach(uid => {
             if (uid !== currentUser.uid) {
                 const user = users[uid];
+                const displayName = user.displayName || 'Guest';
                 const contactDiv = document.createElement('div');
                 contactDiv.classList.add('contact');
-                contactDiv.onclick = () => selectChat({ uid, displayName: user.displayName });
+                contactDiv.onclick = () => selectChat({ uid, displayName });
                 const presenceRef = ref(database, `presence/${uid}`);
                 onValue(presenceRef, (presenceSnap) => {
                     const presence = presenceSnap.val();
                     const isOnline = presence && presence.online;
                     contactDiv.innerHTML = `
-                        <div class="contact-avatar">${user.displayName[0].toUpperCase()}</div>
+                        <div class="contact-avatar">${displayName[0].toUpperCase()}</div>
                         <div class="contact-info">
-                            <div class="contact-name">${user.displayName}</div>
+                            <div class="contact-name">${displayName}</div>
                             <div class="contact-status ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</div>
                         </div>
                     `;
@@ -169,32 +171,43 @@ function selectChat(contact) {
     messageInput.disabled = false;
     sendButton.disabled = false;
     // Stop previous listener
-    if (chatMessagesListener) {
-        chatMessagesListener();
+    if (chatMessagesRef && activeChatListener) {
+        off(chatMessagesRef, 'child_added', activeChatListener);
     }
     // Create chat ID (sorted UIDs)
     const chatId = [currentUser.uid, contact.uid].sort().join('_');
     chatMessagesRef = ref(database, `chats/${chatId}/messages`);
     loadMessages();
     // Listen for new messages
-    chatMessagesListener = onChildAdded(chatMessagesRef, (snapshot) => {
+    activeChatListener = (snapshot) => {
         const message = snapshot.val();
         displayMessage(message);
-    });
+    };
+    chatMessagesListener = onChildAdded(chatMessagesRef, activeChatListener);
+}
+
+// Function to clear chat history
+function clearChat() {
+    if (currentChatUser && chatMessagesRef) {
+        set(chatMessagesRef, null);
+        messagesDiv.innerHTML = '';
+    }
 }
 
 // Function to logout
 function logout() {
     signOut(auth).then(() => {
+        if (chatMessagesRef && activeChatListener) {
+            off(chatMessagesRef, 'child_added', activeChatListener);
+        }
         appContainer.style.display = 'none';
         loginContainer.style.display = 'flex';
         usernameInput.value = '';
         requestedDisplayName = null;
         currentUser = null;
         currentChatUser = null;
-        if (chatMessagesListener) {
-            chatMessagesListener();
-        }
+        chatMessagesRef = null;
+        activeChatListener = null;
     });
 }
 
