@@ -2,6 +2,33 @@
     box-sizing: border-box;
 }
 
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.6);
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.9);
+}
+
+/* Firefox Scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.6) rgba(255, 255, 255, 0.08);
+}
+
 body {
     margin: 0;
     min-height: 100vh;
@@ -16,6 +43,7 @@ body {
     background-repeat: no-repeat;
     color: #e5e7eb;
     position: relative;
+    padding: 10px;
 }
 
 body::before {
@@ -36,6 +64,7 @@ body::before {
     display: flex;
     align-items: center;
     justify-content: center;
+    max-height: 95vh;
 }
 
 .glass-card {
@@ -89,6 +118,7 @@ body::before {
     margin-bottom: 18px;
     outline: none;
     transition: border-color 0.2s ease;
+    font-size: 16px;
 }
 
 .login-form input:focus {
@@ -297,6 +327,7 @@ body::before {
     background: rgba(15, 23, 42, 0.75);
     color: #f8fafc;
     outline: none;
+    font-size: 16px;
 }
 
 .search-box input::placeholder {
@@ -474,12 +505,16 @@ body::before {
 .chat-messages {
     flex: 1;
     padding: 24px 28px;
-    overflow-y: auto;
+    padding-right: 16px;
+    overflow-y: scroll;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    min-height: 340px;
+    height: 100%;
+    max-height: 500px;
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.99));
+    scroll-behavior: smooth;
 }
 
 .message {
@@ -543,6 +578,7 @@ body::before {
     background: rgba(15, 23, 42, 0.85);
     color: #f8fafc;
     outline: none;
+    font-size: 16px;
 }
 
 .chat-input input:focus {
@@ -574,17 +610,184 @@ body::before {
     background: rgba(255, 255, 255, 0.04);
 }
 
+/* Responsive Design */
+
+/* Tablet (768px - 1080px) */
 @media (max-width: 1080px) {
     .app-container {
         grid-template-columns: 1fr;
+        width: 95vw;
+        height: 90vh;
     }
 
-    .sidebar,
+    .sidebar {
+        display: none;
+    }
+
     .main-chat {
+        width: 100%;
+        margin-top: 16px;
+        max-height: 90vh;
+    }
+
+    .message {
+        max-width: 85%;
+    }
+}
+
+/* Small Tablet (600px - 768px) */
+@media (max-width: 768px) {
+    .app-container,
+    .login-container {
+        width: 95vw;
+        height: auto;
+        min-height: 95vh;
+        flex-direction: column;
+    }
+
+    .login-form {
+        width: 100%;
+        max-width: 100%;
+        padding: 30px 20px;
+    }
+
+    .main-chat {
+        width: 100%;
+        height: auto;
+        min-height: 70vh;
+    }
+
+    .chat-messages {
+        min-height: 50vh;
+        padding: 16px 20px;
+    }
+
+    .chat-input {
+        padding: 16px 20px 20px;
+    }
+
+    .message {
+        max-width: 90%;
+    }
+
+    .chat-meta h1 {
+        font-size: 1.2rem;
+    }
+
+    .header-buttons {
+        flex-wrap: wrap;
+    }
+
+    #logoutButton,
+    #clearButton {
+        min-width: 90px;
+        padding: 10px 16px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Mobile Phone (< 600px) */
+@media (max-width: 599px) {
+    .app-container,
+    .login-container {
+        width: 100vw;
+        height: auto;
+        min-height: 100vh;
+        padding: 0;
+    }
+
+    .login-form {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 0;
+        padding: 40px 20px;
+    }
+
+    .glass-card {
+        border-radius: 20px;
+    }
+
+    .main-chat {
+        width: 100vw;
+        height: auto;
+        min-height: 100vh;
+        border-radius: 0;
+        padding: 0;
+    }
+
+    .chat-header {
+        padding: 16px 16px 12px;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .contact-summary {
         width: 100%;
     }
 
-    .main-chat {
-        margin-top: 16px;
+    .chat-meta h1 {
+        font-size: 1rem;
+    }
+
+    .header-buttons {
+        width: 100%;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    #logoutButton,
+    #clearButton {
+        min-width: 80px;
+        padding: 10px 12px;
+        font-size: 0.85rem;
+        height: 40px;
+    }
+
+    .chat-messages {
+        min-height: 55vh;
+        padding: 12px 16px;
+        gap: 10px;
+    }
+
+    .message {
+        max-width: 100%;
+        padding: 12px 14px;
+        font-size: 0.95rem;
+    }
+
+    .timestamp {
+        font-size: 0.75rem;
+        margin-top: 8px;
+    }
+
+    .chat-input {
+        grid-template-columns: auto 1fr auto;
+        gap: 10px;
+        padding: 16px;
+        border-radius: 0;
+    }
+
+    .chat-input input {
+        padding: 12px 14px;
+        font-size: 1rem;
+    }
+
+    .chat-input .icon-button,
+    .primary-button {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        padding: 8px;
+    }
+
+    .emoji-picker {
+        bottom: 50px;
+        left: 0;
+    }
+
+    .emoji-option {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
     }
 }

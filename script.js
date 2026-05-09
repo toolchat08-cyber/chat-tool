@@ -249,7 +249,11 @@ function displayMessage(message) {
     const timeString = new Date(message.timestamp).toLocaleString();
     messageDiv.innerHTML = `<div><strong>${message.sender}:</strong> ${message.text}</div><div class="timestamp">${timeString}</div>`;
     messagesDiv.appendChild(messageDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    // Auto-scroll to bottom with a small delay to ensure DOM rendering
+    setTimeout(() => {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }, 10);
 }
 
 function insertLateResponseWarning() {
@@ -257,7 +261,11 @@ function insertLateResponseWarning() {
     warningDiv.classList.add('warning-line');
     warningDiv.textContent = 'Late response: this reply came more than 2 minutes after the last incoming message.';
     messagesDiv.appendChild(warningDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    // Auto-scroll to bottom with a small delay
+    setTimeout(() => {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }, 10);
 }
 
 function shouldShowLateWarning() {
