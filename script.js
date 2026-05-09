@@ -26,6 +26,8 @@ let userPresenceRef = null;
 let chatMessagesRef = null;
 let chatMessagesListener = null;
 let activeChatListener = null;
+let usersRef = null;
+let presenceListeners = [];
 let requestedDisplayName = null;
 
 // Get DOM elements
@@ -40,24 +42,31 @@ const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const clearButton = document.getElementById('clearButton');
 const logoutButton = document.getElementById('logoutButton');
+const refreshButton = document.getElementById('refreshButton');
+const userLabel = document.getElementById('userLabel');
 
 // Function to handle login
 async function login() {
     const username = usernameInput.value.trim();
     console.log('Login attempt with username:', username);
-    if (username) {
-        requestedDisplayName = username;
-        try {
-            console.log('Starting anonymous signin...');
-            await signInAnonymously(auth);
-            console.log('Anonymous signin completed');
-            // Wait for auth state change
-        } catch (error) {
-            console.error('Login error:', error.code, error.message);
-            alert('Login failed: ' + error.message);
-        }
-    } else {
+    if (!username) {
         alert('Please enter a username');
+        return;
+    }
+
+    requestedDisplayName = username;
+    try {
+        if (auth.currentUser) {
+            console.log('Signing out existing user before login');
+            await signOut(auth);
+        }
+        console.log('Starting anonymous signin...');
+        await signInAnonymously(auth);
+        console.log('Anonymous signin completed');
+        // Wait for auth state change
+    } catch (error) {
+        console.error('Login error:', error.code, error.message);
+        alert('Login failed: ' + error.message);
     }
 }
 
@@ -69,9 +78,9 @@ onAuthStateChanged(auth, async (user) => {
         console.log('Current user UID:', currentUser.uid);
         console.log('Current user displayName:', currentUser.displayName);
         console.log('Requested display name:', requestedDisplayName);
-        const username = currentUser.displayName || requestedDisplayName;
+        const username = requestedDisplayName || currentUser.displayName;
 
-        if (!currentUser.displayName && username) {
+        if (username && currentUser.displayName !== username) {
             console.log('Updating profile with displayName:', username);
             await updateProfile(user, { displayName: username });
             currentUser = auth.currentUser;
@@ -88,6 +97,7 @@ onAuthStateChanged(auth, async (user) => {
         console.log('Login successful, showing app');
         loginContainer.style.display = 'none';
         appContainer.style.display = 'flex';
+        userLabel.textContent = `Logged in as ${currentUser.displayName}`;
         setupPresence();
         initializeContacts();
     } else {
@@ -113,36 +123,44 @@ function setupPresence() {
     }
 }
 
+function cleanupContactListeners() {
+    if (usersRef) {
+        off(usersRef);
+        usersRef = null;
+    }
+    presenceListeners.forEach(({ presenceRef, callback }) => {
+        off(presenceRef, 'value', callback);
+    });
+    presenceListeners = [];
+}
+
 // Function to initialize contacts
 function initializeContacts() {
     console.log('Initializing contacts for user:', currentUser.displayName);
+    cleanupContactListeners();
     contactsList.innerHTML = '';
-    const usersRef = ref(database, 'users');
+    usersRef = ref(database, 'presence');
     try {
         onValue(usersRef, (snapshot) => {
-            const users = snapshot.val() || {};
-            console.log('Users loaded:', Object.keys(users));
+            const presences = snapshot.val() || {};
+            console.log('Presence loaded:', Object.keys(presences));
             contactsList.innerHTML = '';
-            Object.keys(users).forEach(uid => {
+            Object.keys(presences).forEach(uid => {
                 if (uid !== currentUser.uid) {
-                    const user = users[uid];
-                    const displayName = user.displayName || 'Guest';
-                    console.log('Adding contact:', displayName);
+                    const presence = presences[uid];
+                    if (!presence || !presence.online) return;
+                    const displayName = presence.displayName || 'Guest';
+                    console.log('Adding online contact:', displayName);
                     const contactDiv = document.createElement('div');
                     contactDiv.classList.add('contact');
                     contactDiv.onclick = () => selectChat({ uid, displayName });
-                    const presenceRef = ref(database, `presence/${uid}`);
-                    onValue(presenceRef, (presenceSnap) => {
-                        const presence = presenceSnap.val();
-                        const isOnline = presence && presence.online;
-                        contactDiv.innerHTML = `
-                            <div class="contact-avatar">${displayName[0].toUpperCase()}</div>
-                            <div class="contact-info">
-                                <div class="contact-name">${displayName}</div>
-                                <div class="contact-status ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</div>
-                            </div>
-                        `;
-                    });
+                    contactDiv.innerHTML = `
+                        <div class="contact-avatar">${displayName[0].toUpperCase()}</div>
+                        <div class="contact-info">
+                            <div class="contact-name">${displayName}</div>
+                            <div class="contact-status status-online">Online</div>
+                        </div>
+                    `;
                     contactsList.appendChild(contactDiv);
                 }
             });
@@ -150,6 +168,10 @@ function initializeContacts() {
     } catch (error) {
         console.error('Error initializing contacts:', error);
     }
+}
+
+function refreshContacts() {
+    initializeContacts();
 }
 
 // Function to send a message
@@ -221,18 +243,33 @@ function clearChat() {
 
 // Function to logout
 function logout() {
+    if (currentUser && userPresenceRef) {
+        const previousUserRef = ref(database, `users/${currentUser.uid}`);
+        set(userPresenceRef, {
+            online: false,
+            displayName: currentUser.displayName
+        });
+        set(previousUserRef, {
+            online: false,
+            displayName: currentUser.displayName
+        });
+    }
+
     signOut(auth).then(() => {
         if (chatMessagesRef && activeChatListener) {
             off(chatMessagesRef, 'child_added', activeChatListener);
         }
+        cleanupContactListeners();
         appContainer.style.display = 'none';
         loginContainer.style.display = 'flex';
+        userLabel.textContent = '';
         usernameInput.value = '';
         requestedDisplayName = null;
         currentUser = null;
         currentChatUser = null;
         chatMessagesRef = null;
         activeChatListener = null;
+        userPresenceRef = null;
     });
 }
 
@@ -250,4 +287,5 @@ messageInput.addEventListener('keypress', (e) => {
     }
 });
 clearButton.addEventListener('click', clearChat);
+refreshButton.addEventListener('click', refreshContacts);
 logoutButton.addEventListener('click', logout);

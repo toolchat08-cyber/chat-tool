@@ -18,12 +18,16 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <h3>Contacts</h3>
+                <button id="refreshButton">Refresh</button>
             </div>
             <div class="contacts-list" id="contactsList"></div>
         </div>
         <div class="main-chat">
             <div class="chat-header">
-                <h1 id="chatTitle">Select a contact to chat</h1>
+                <div>
+                    <h1 id="chatTitle">Select a contact to chat</h1>
+                    <div id="userLabel" class="user-label"></div>
+                </div>
                 <div class="header-buttons">
                     <button id="clearButton">Clear Chat</button>
                     <button id="logoutButton">Logout</button>
