@@ -26,9 +26,6 @@ let userPresenceRef = null;
 let chatMessagesRef = null;
 let chatMessagesListener = null;
 
-// Contacts (hardcoded for demo)
-const contacts = ['Alice', 'Bob', 'Charlie', 'David'];
-
 // Get DOM elements
 const loginContainer = document.getElementById('loginContainer');
 const appContainer = document.getElementById('appContainer');
@@ -72,34 +69,42 @@ onAuthStateChanged(auth, async (user) => {
 
 // Function to setup presence
 function setupPresence() {
+    const userRef = ref(database, `users/${currentUser.uid}`);
+    set(userRef, { displayName: currentUser.displayName, online: true });
     userPresenceRef = ref(database, `presence/${currentUser.uid}`);
     set(userPresenceRef, { online: true, displayName: currentUser.displayName });
     onDisconnect(userPresenceRef).set({ online: false, displayName: currentUser.displayName });
+    onDisconnect(userRef).update({ online: false });
 }
 
 // Function to initialize contacts
 function initializeContacts() {
     contactsList.innerHTML = '';
-    const allContacts = [{ uid: currentUser.uid, displayName: currentUser.displayName }, ...contacts.map(name => ({ uid: name, displayName: name }))];
-    allContacts.forEach(contact => {
-        const contactDiv = document.createElement('div');
-        contactDiv.classList.add('contact');
-        if (contact.uid !== currentUser.uid) {
-            contactDiv.onclick = () => selectChat(contact);
-        }
-        const presenceRef = ref(database, `presence/${contact.uid}`);
-        onValue(presenceRef, (snapshot) => {
-            const presence = snapshot.val();
-            const isOnline = presence && presence.online;
-            contactDiv.innerHTML = `
-                <div class="contact-avatar">${contact.displayName[0].toUpperCase()}</div>
-                <div class="contact-info">
-                    <div class="contact-name">${contact.displayName}</div>
-                    <div class="contact-status ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</div>
-                </div>
-            `;
+    const usersRef = ref(database, 'users');
+    onValue(usersRef, (snapshot) => {
+        const users = snapshot.val() || {};
+        contactsList.innerHTML = '';
+        Object.keys(users).forEach(uid => {
+            if (uid !== currentUser.uid) {
+                const user = users[uid];
+                const contactDiv = document.createElement('div');
+                contactDiv.classList.add('contact');
+                contactDiv.onclick = () => selectChat({ uid, displayName: user.displayName });
+                const presenceRef = ref(database, `presence/${uid}`);
+                onValue(presenceRef, (presenceSnap) => {
+                    const presence = presenceSnap.val();
+                    const isOnline = presence && presence.online;
+                    contactDiv.innerHTML = `
+                        <div class="contact-avatar">${user.displayName[0].toUpperCase()}</div>
+                        <div class="contact-info">
+                            <div class="contact-name">${user.displayName}</div>
+                            <div class="contact-status ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</div>
+                        </div>
+                    `;
+                });
+                contactsList.appendChild(contactDiv);
+            }
         });
-        contactsList.appendChild(contactDiv);
     });
 }
 
