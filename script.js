@@ -30,6 +30,7 @@ let usersRef = null;
 let presenceListeners = [];
 let chatNotificationListeners = [];
 let unreadCounts = {};
+let chatWarnings = {};
 let requestedDisplayName = null;
 let lastReceivedTimestamp = null;
 const RESPONSE_LATE_MS = 2 * 60 * 1000; // 2 minutes
@@ -256,6 +257,7 @@ function sendMessage() {
         if (shouldShowLateWarning()) {
             insertLateResponseWarning();
             lastReceivedTimestamp = null;
+            chatWarnings[currentChatUser.uid] = true;
         }
         push(chatMessagesRef, {
             text: message,
@@ -272,6 +274,11 @@ function loadMessages() {
     messagesDiv.innerHTML = '';
     lastReceivedTimestamp = null;
     // Messages will be loaded via onChildAdded listener
+    
+    // Restore warning if it exists for this chat
+    if (currentChatUser && chatWarnings[currentChatUser.uid]) {
+        insertLateResponseWarning();
+    }
 }
 
 // Function to display a message
@@ -299,6 +306,11 @@ function insertLateResponseWarning() {
     warningDiv.classList.add('warning-line');
     warningDiv.textContent = 'Late response: this reply came more than 2 minutes after the last incoming message.';
     messagesDiv.appendChild(warningDiv);
+    
+    // Store warning for this chat
+    if (currentChatUser) {
+        chatWarnings[currentChatUser.uid] = true;
+    }
     
     // Auto-scroll to bottom with a small delay
     setTimeout(() => {
@@ -346,6 +358,10 @@ function clearChat() {
     if (currentChatUser && chatMessagesRef) {
         set(chatMessagesRef, null);
         messagesDiv.innerHTML = '';
+        // Clear warning for this chat
+        if (currentChatUser) {
+            chatWarnings[currentChatUser.uid] = false;
+        }
     }
 }
 
