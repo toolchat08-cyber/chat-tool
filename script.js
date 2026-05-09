@@ -44,13 +44,16 @@ const logoutButton = document.getElementById('logoutButton');
 // Function to handle login
 async function login() {
     const username = usernameInput.value.trim();
+    console.log('Login attempt with username:', username);
     if (username) {
         requestedDisplayName = username;
         try {
+            console.log('Starting anonymous signin...');
             await signInAnonymously(auth);
+            console.log('Anonymous signin completed');
             // Wait for auth state change
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('Login error:', error.code, error.message);
             alert('Login failed: ' + error.message);
         }
     } else {
@@ -60,26 +63,35 @@ async function login() {
 
 // Auth state observer
 onAuthStateChanged(auth, async (user) => {
+    console.log('Auth state changed. User:', user ? user.uid : 'null');
     if (user) {
         currentUser = user;
+        console.log('Current user UID:', currentUser.uid);
+        console.log('Current user displayName:', currentUser.displayName);
+        console.log('Requested display name:', requestedDisplayName);
         const username = currentUser.displayName || requestedDisplayName;
 
         if (!currentUser.displayName && username) {
+            console.log('Updating profile with displayName:', username);
             await updateProfile(user, { displayName: username });
             currentUser = auth.currentUser;
+            console.log('Profile updated. New displayName:', currentUser.displayName);
         }
 
         if (!currentUser.displayName) {
+            console.log('No displayName found, showing login screen');
             loginContainer.style.display = 'flex';
             appContainer.style.display = 'none';
             return;
         }
 
+        console.log('Login successful, showing app');
         loginContainer.style.display = 'none';
         appContainer.style.display = 'flex';
         setupPresence();
         initializeContacts();
     } else {
+        console.log('No user, showing login screen');
         loginContainer.style.display = 'flex';
         appContainer.style.display = 'none';
     }
@@ -87,44 +99,57 @@ onAuthStateChanged(auth, async (user) => {
 
 // Function to setup presence
 function setupPresence() {
-    const userRef = ref(database, `users/${currentUser.uid}`);
-    set(userRef, { displayName: currentUser.displayName, online: true });
-    userPresenceRef = ref(database, `presence/${currentUser.uid}`);
-    set(userPresenceRef, { online: true, displayName: currentUser.displayName });
-    onDisconnect(userPresenceRef).set({ online: false, displayName: currentUser.displayName });
-    onDisconnect(userRef).update({ online: false });
+    console.log('Setting up presence for:', currentUser.displayName);
+    try {
+        const userRef = ref(database, `users/${currentUser.uid}`);
+        set(userRef, { displayName: currentUser.displayName, online: true });
+        userPresenceRef = ref(database, `presence/${currentUser.uid}`);
+        set(userPresenceRef, { online: true, displayName: currentUser.displayName });
+        onDisconnect(userPresenceRef).set({ online: false, displayName: currentUser.displayName });
+        onDisconnect(userRef).update({ online: false });
+        console.log('Presence setup complete');
+    } catch (error) {
+        console.error('Error setting up presence:', error);
+    }
 }
 
 // Function to initialize contacts
 function initializeContacts() {
+    console.log('Initializing contacts for user:', currentUser.displayName);
     contactsList.innerHTML = '';
     const usersRef = ref(database, 'users');
-    onValue(usersRef, (snapshot) => {
-        const users = snapshot.val() || {};
-        contactsList.innerHTML = '';
-        Object.keys(users).forEach(uid => {
-            if (uid !== currentUser.uid) {
-                const user = users[uid];
-                const displayName = user.displayName || 'Guest';
-                const contactDiv = document.createElement('div');
-                contactDiv.classList.add('contact');
-                contactDiv.onclick = () => selectChat({ uid, displayName });
-                const presenceRef = ref(database, `presence/${uid}`);
-                onValue(presenceRef, (presenceSnap) => {
-                    const presence = presenceSnap.val();
-                    const isOnline = presence && presence.online;
-                    contactDiv.innerHTML = `
-                        <div class="contact-avatar">${displayName[0].toUpperCase()}</div>
-                        <div class="contact-info">
-                            <div class="contact-name">${displayName}</div>
-                            <div class="contact-status ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</div>
-                        </div>
-                    `;
-                });
-                contactsList.appendChild(contactDiv);
-            }
+    try {
+        onValue(usersRef, (snapshot) => {
+            const users = snapshot.val() || {};
+            console.log('Users loaded:', Object.keys(users));
+            contactsList.innerHTML = '';
+            Object.keys(users).forEach(uid => {
+                if (uid !== currentUser.uid) {
+                    const user = users[uid];
+                    const displayName = user.displayName || 'Guest';
+                    console.log('Adding contact:', displayName);
+                    const contactDiv = document.createElement('div');
+                    contactDiv.classList.add('contact');
+                    contactDiv.onclick = () => selectChat({ uid, displayName });
+                    const presenceRef = ref(database, `presence/${uid}`);
+                    onValue(presenceRef, (presenceSnap) => {
+                        const presence = presenceSnap.val();
+                        const isOnline = presence && presence.online;
+                        contactDiv.innerHTML = `
+                            <div class="contact-avatar">${displayName[0].toUpperCase()}</div>
+                            <div class="contact-info">
+                                <div class="contact-name">${displayName}</div>
+                                <div class="contact-status ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</div>
+                            </div>
+                        `;
+                    });
+                    contactsList.appendChild(contactDiv);
+                }
+            });
         });
-    });
+    } catch (error) {
+        console.error('Error initializing contacts:', error);
+    }
 }
 
 // Function to send a message
