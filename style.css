@@ -362,6 +362,16 @@ body::before {
     background: rgba(255, 255, 255, 0.1);
 }
 
+.contact.stale-warning {
+    border: 1px solid rgba(245, 158, 11, 0.9);
+    background: rgba(245, 159, 11, 0.556);
+}
+
+.contact.stale-danger {
+    border: 1px solid rgba(239, 68, 68, 0.9);
+    background: rgba(219, 29, 29, 0.648);
+}
+
 .contact-avatar {
     width: 48px;
     height: 48px;
@@ -378,10 +388,23 @@ body::before {
     flex: 1;
 }
 
+.contact-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
 .contact-name {
     margin: 0;
     font-weight: 700;
     font-size: 1rem;
+}
+
+.contact-time {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-weight: 500;
 }
 
 .contact-status {

@@ -1,6 +1,6 @@
 // Import Firebase modules
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
-import { getDatabase, ref, push, onChildAdded, set, off, onDisconnect, onValue, remove } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+import { getDatabase, ref, push, onChildAdded, set, off, onDisconnect, onValue, remove, get } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
 import { getAuth, signInAnonymously, updateProfile, onAuthStateChanged, signOut, setPersistence, inMemoryPersistence } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
 
 // Firebase configuration - Replace with your own config
@@ -29,8 +29,10 @@ let activeChatListener = null;
 let usersRef = null;
 let presenceListeners = [];
 let chatNotificationListeners = [];
+let chatMetaListeners = [];
 let unreadCounts = {};
 let chatWarnings = {};
+let contactRefreshTimer = null;
 let requestedDisplayName = null;
 let lastReceivedTimestamp = null;
 const RESPONSE_LATE_MS = 2 * 60 * 1000; // 2 minutes
@@ -152,6 +154,18 @@ function updateUserPanel() {
     document.querySelector('.user-avatar').textContent = avatar;
 }
 
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const now = Date.now();
+    const ageMs = now - timestamp;
+    const ageSeconds = Math.floor(ageMs / 1000);
+    const hours = Math.floor(ageSeconds / 3600);
+    const minutes = Math.floor((ageSeconds % 3600) / 60);
+    const seconds = ageSeconds % 60;
+    
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
 function renderContacts() {
     const query = contactSearchInput?.value.trim().toLowerCase() || '';
     contactsList.innerHTML = '';
@@ -162,14 +176,29 @@ function renderContacts() {
         contactsList.innerHTML = `<div class="empty-state">No contacts found</div>`;
     }
 
+    const now = Date.now();
     filtered.forEach((contact) => {
         const contactDiv = document.createElement('div');
         contactDiv.classList.add('contact');
+
+        if (contact.lastMessageTimestamp && !contact.suppressStaleHighlight) {
+            const ageMs = now - contact.lastMessageTimestamp;
+            if (ageMs >= 2 * 60 * 1000) {
+                contactDiv.classList.add('stale-danger');
+            } else if (ageMs >= 1 * 60 * 1000) {
+                contactDiv.classList.add('stale-warning');
+            }
+        }
+
         contactDiv.onclick = () => selectChat(contact);
+        const timeAgo = contact.chatTimerReset ? '0:00:00' : formatTimeAgo(contact.chatStartTimestamp);
         contactDiv.innerHTML = `
             <div class="contact-avatar">${contact.displayName[0].toUpperCase()}</div>
             <div class="contact-info">
-                <p class="contact-name">${contact.displayName}</p>
+                <div class="contact-header">
+                    <p class="contact-name">${contact.displayName}</p>
+                    ${timeAgo ? `<span class="contact-time">${timeAgo}</span>` : ''}
+                </div>
                 <p class="contact-status status-online">Online</p>
             </div>
             ${contact.unreadCount > 0 ? `<span class="unread-badge">${contact.unreadCount > 99 ? '99+' : contact.unreadCount}</span>` : ''}
@@ -177,6 +206,22 @@ function renderContacts() {
         contactsList.appendChild(contactDiv);
     });
     onlineCountLabel.textContent = `${filtered.length} online`;
+}
+
+function startContactRefreshTimer() {
+    if (contactRefreshTimer) return;
+    contactRefreshTimer = setInterval(() => {
+        if (contactsData.length > 0) {
+            renderContacts();
+        }
+    }, 1000); // Update every second for live counter
+}
+
+
+function stopContactRefreshTimer() {
+    if (!contactRefreshTimer) return;
+    clearInterval(contactRefreshTimer);
+    contactRefreshTimer = null;
 }
 
 function cleanupContactListeners() {
@@ -197,6 +242,34 @@ function cleanupNotificationListeners() {
     chatNotificationListeners = [];
 }
 
+function cleanupChatMetaListeners() {
+    chatMetaListeners.forEach(({ metaRef, callback }) => {
+        off(metaRef, 'value', callback);
+    });
+    chatMetaListeners = [];
+}
+
+function setupChatMetaListeners() {
+    cleanupChatMetaListeners();
+
+    contactsData.forEach((contact) => {
+        const chatId = [currentUser.uid, contact.uid].sort().join('_');
+        const metaRef = ref(database, `chats/${chatId}/meta/startTimestamp`);
+
+        const callback = (snapshot) => {
+            if (!snapshot.exists()) return;
+            const startTimestamp = snapshot.val();
+            if (contact.chatStartTimestamp !== startTimestamp) {
+                contact.chatStartTimestamp = startTimestamp;
+                renderContacts();
+            }
+        };
+
+        onValue(metaRef, callback);
+        chatMetaListeners.push({ metaRef, callback });
+    });
+}
+
 function setupNotificationListeners() {
     cleanupNotificationListeners();
     const listenerStartTime = Date.now();
@@ -209,7 +282,17 @@ function setupNotificationListeners() {
             const message = snapshot.val();
             if (!message || message.senderUid === currentUser.uid) return;
             if (message.timestamp <= listenerStartTime) return;
-            if (currentChatUser && currentChatUser.uid === contact.uid) return;
+
+            if (contact.chatTimerReset) {
+                contact.chatStartTimestamp = message.timestamp;
+                contact.chatTimerReset = false;
+            }
+            contact.lastMessageTimestamp = message.timestamp;
+            contact.suppressStaleHighlight = false;
+            if (currentChatUser && currentChatUser.uid === contact.uid) {
+                renderContacts();
+                return;
+            }
 
             contact.unreadCount = (contact.unreadCount || 0) + 1;
             unreadCounts[contact.uid] = contact.unreadCount;
@@ -219,6 +302,42 @@ function setupNotificationListeners() {
         onChildAdded(chatRef, callback);
         chatNotificationListeners.push({ chatRef, callback });
     });
+}
+
+async function fetchChatStartTimestamp(contact) {
+    const chatId = [currentUser.uid, contact.uid].sort().join('_');
+    const metaRef = ref(database, `chats/${chatId}/meta/startTimestamp`);
+
+    try {
+        const metaSnapshot = await get(metaRef);
+        if (metaSnapshot.exists()) {
+            const startTimestamp = metaSnapshot.val();
+            if (contact.chatStartTimestamp !== startTimestamp) {
+                contact.chatStartTimestamp = startTimestamp;
+                renderContacts();
+            }
+            return;
+        }
+
+        const messagesRef = ref(database, `chats/${chatId}/messages`);
+        const snapshot = await get(messagesRef);
+        const messages = snapshot.val();
+        if (!messages) return;
+
+        const timestamps = Object.values(messages)
+            .filter(message => message && message.timestamp)
+            .map(message => message.timestamp);
+
+        if (timestamps.length === 0) return;
+
+        const earliest = Math.min(...timestamps);
+        if (contact.chatStartTimestamp !== earliest) {
+            contact.chatStartTimestamp = earliest;
+            renderContacts();
+        }
+    } catch (error) {
+        console.error('Error fetching chat start timestamp:', error);
+    }
 }
 
 // Function to initialize contacts
@@ -232,12 +351,27 @@ function initializeContacts() {
         onValue(usersRef, (snapshot) => {
             const presences = snapshot.val() || {};
             console.log('Presence loaded:', Object.keys(presences));
+            const previousContacts = contactsData;
             contactsData = Object.keys(presences)
                 .filter(uid => uid !== currentUser.uid)
-                .map(uid => ({ uid, unreadCount: unreadCounts[uid] || 0, ...presences[uid] }))
+                .map(uid => {
+                    const existing = previousContacts.find(contact => contact.uid === uid);
+                    return {
+                        uid,
+                        unreadCount: unreadCounts[uid] || 0,
+                        lastMessageTimestamp: existing?.lastMessageTimestamp,
+                        chatStartTimestamp: existing?.chatStartTimestamp,
+                        chatTimerReset: existing?.chatTimerReset || false,
+                        suppressStaleHighlight: existing?.suppressStaleHighlight || false,
+                        ...presences[uid]
+                    };
+                })
                 .filter(contact => contact.online);
             renderContacts();
             setupNotificationListeners();
+            setupChatMetaListeners();
+            startContactRefreshTimer();
+            contactsData.forEach((contact) => fetchChatStartTimestamp(contact));
         });
     } catch (error) {
         console.error('Error initializing contacts:', error);
@@ -259,12 +393,34 @@ function sendMessage() {
             lastReceivedTimestamp = null;
             chatWarnings[currentChatUser.uid] = true;
         }
+        const now = Date.now();
         push(chatMessagesRef, {
             text: message,
-            timestamp: Date.now(),
+            timestamp: now,
             sender: currentUser.displayName,
             senderUid: currentUser.uid
         });
+
+        const chatId = [currentUser.uid, currentChatUser.uid].sort().join('_');
+        const chatMetaRef = ref(database, `chats/${chatId}/meta/startTimestamp`);
+        get(chatMetaRef)
+            .then((snapshot) => {
+                if (!snapshot.exists()) {
+                    set(chatMetaRef, now).catch((error) => console.error('Error saving chat start timestamp:', error));
+                }
+            })
+            .catch((error) => console.error('Error checking chat start timestamp:', error));
+
+        const contact = contactsData.find(c => c.uid === currentChatUser.uid);
+        if (contact) {
+            if (contact.chatTimerReset) {
+                contact.chatStartTimestamp = now;
+                contact.chatTimerReset = false;
+            }
+            contact.suppressStaleHighlight = true;
+            renderContacts();
+        }
+
         messageInput.value = '';
     }
 }
@@ -356,8 +512,23 @@ function selectChat(contact) {
 // Function to clear chat history
 function clearChat() {
     if (currentChatUser && chatMessagesRef) {
+        const now = Date.now();
         set(chatMessagesRef, null);
         messagesDiv.innerHTML = '';
+
+        const chatId = [currentUser.uid, currentChatUser.uid].sort().join('_');
+        const chatMetaRef = ref(database, `chats/${chatId}/meta/startTimestamp`);
+        set(chatMetaRef, null).catch((error) => console.error('Error resetting chat timer:', error));
+
+        const contact = contactsData.find(c => c.uid === currentChatUser.uid);
+        if (contact) {
+            contact.chatStartTimestamp = null;
+            contact.chatTimerReset = true;
+            contact.lastMessageTimestamp = undefined;
+            contact.suppressStaleHighlight = true;
+            renderContacts();
+        }
+
         // Clear warning for this chat
         if (currentChatUser) {
             chatWarnings[currentChatUser.uid] = false;
@@ -378,6 +549,8 @@ function logout() {
             off(chatMessagesRef, 'child_added', activeChatListener);
         }
         cleanupContactListeners();
+        cleanupChatMetaListeners();
+        stopContactRefreshTimer();
         messagesDiv.innerHTML = '';
         appContainer.style.display = 'none';
         loginContainer.style.display = 'flex';
